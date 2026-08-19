@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToMongoDB, setCorsHeaders } from './db';
+import { connectToMongoDB, setCorsHeaders } from './db.js';
+
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
