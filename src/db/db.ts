@@ -213,8 +213,9 @@ export async function createIPOWithApplications(ipoData: Omit<IPO, 'id' | 'creat
     }
   });
 
-  return newIPO;
+  return { ipo: newIPO, applications: newApplications };
 }
+
 
 /**
  * Adds a person manually to an existing IPO if not already added

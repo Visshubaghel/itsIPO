@@ -2,9 +2,19 @@ import { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, seedInitialData, createIPOWithApplications, addPersonToIPO } from './db/db';
 import type { Person, Transaction, ApplicationStatus, TransactionType } from './types';
-
 import { generateId, getTodayInputValue } from './utils/formatters';
-
+import {
+  fetchFromMongoDBAtlas,
+  apiSavePerson,
+  apiDeletePerson,
+  apiSaveIPO,
+  apiDeleteIPO,
+  apiUpdateApplication,
+  apiSaveApplication,
+  apiDeleteApplication,
+  apiSaveTransaction,
+  apiDeleteTransaction,
+} from './db/mongodb';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -38,9 +48,27 @@ export function App() {
   const [selectedLedgerPerson, setSelectedLedgerPerson] = useState<Person | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Initialize Seed Data on First Launch
+  // Initialize Seed Data and Live Sync from MongoDB Atlas
   useEffect(() => {
+    // 1. Initial local seed if DB is brand new
     seedInitialData().catch(console.error);
+
+    // 2. Fetch live state from MongoDB Atlas on load
+    fetchFromMongoDBAtlas().catch(console.error);
+
+    // 3. Polling every 5 seconds for live multi-device sync
+    const interval = setInterval(() => {
+      fetchFromMongoDBAtlas().catch(console.error);
+    }, 5000);
+
+    // 4. Also fetch on window focus when switching back from phone/tab
+    const onFocus = () => fetchFromMongoDBAtlas().catch(console.error);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   // Handle Dark Mode CSS Class
@@ -68,7 +96,8 @@ export function App() {
     allotmentDate?: string;
     note?: string;
   }) => {
-    await createIPOWithApplications(ipoData);
+    const { ipo, applications: newApps } = await createIPOWithApplications(ipoData);
+    apiSaveIPO(ipo, newApps);
   };
 
   const handleDeleteIPO = async (ipoId: string) => {
@@ -76,25 +105,33 @@ export function App() {
       await db.ipos.delete(ipoId);
       await db.applications.where('ipoId').equals(ipoId).delete();
     });
+    apiDeleteIPO(ipoId);
   };
 
   const handleUpdateApplicationStatus = async (applicationId: string, newStatus: ApplicationStatus) => {
+    const appliedAt = newStatus !== 'Not Applied' ? getTodayInputValue() : undefined;
     await db.applications.update(applicationId, {
       status: newStatus,
-      appliedAt: newStatus !== 'Not Applied' ? getTodayInputValue() : undefined,
+      appliedAt,
     });
+    apiUpdateApplication(applicationId, { status: newStatus, appliedAt });
   };
 
   const handleUpdateApplicationAmount = async (applicationId: string, newAmount: number) => {
     await db.applications.update(applicationId, { amount: newAmount });
+    apiUpdateApplication(applicationId, { amount: newAmount });
   };
 
   const handleAddPersonToIPO = async (ipoId: string, personId: string) => {
-    await addPersonToIPO(ipoId, personId);
+    const newApp = await addPersonToIPO(ipoId, personId);
+    if (newApp) {
+      apiSaveApplication(newApp);
+    }
   };
 
   const handleDeleteApplication = async (applicationId: string) => {
     await db.applications.delete(applicationId);
+    apiDeleteApplication(applicationId);
   };
 
   // Handlers for People / Accounts
@@ -109,14 +146,18 @@ export function App() {
   }) => {
     const today = getTodayInputValue();
     if (personData.id) {
-      await db.people.update(personData.id, {
+      const updatedPerson: Person = {
+        id: personData.id,
         name: personData.name,
         bankBroker: personData.bankBroker,
         upiOrAccount: personData.upiOrAccount,
         defaultAmount: personData.defaultAmount,
         note: personData.note,
         isActive: personData.isActive,
-      });
+        createdAt: today,
+      };
+      await db.people.update(personData.id, updatedPerson);
+      apiSavePerson(updatedPerson);
     } else {
       const newPersonId = generateId('person');
       const newPerson: Person = {
@@ -130,11 +171,17 @@ export function App() {
         createdAt: today,
       };
       await db.people.add(newPerson);
+      apiSavePerson(newPerson);
     }
   };
 
   const handleTogglePersonActive = async (personId: string, currentActiveState: boolean) => {
-    await db.people.update(personId, { isActive: !currentActiveState });
+    const person = await db.people.get(personId);
+    if (person) {
+      const updated = { ...person, isActive: !currentActiveState };
+      await db.people.update(personId, { isActive: !currentActiveState });
+      apiSavePerson(updated);
+    }
   };
 
   const handleDeletePerson = async (personId: string) => {
@@ -143,6 +190,7 @@ export function App() {
       await db.applications.where('personId').equals(personId).delete();
       await db.transactions.where('personId').equals(personId).delete();
     });
+    apiDeletePerson(personId);
   };
 
   // Handlers for Transactions
@@ -160,10 +208,12 @@ export function App() {
       createdAt: getTodayInputValue(),
     };
     await db.transactions.add(newTx);
+    apiSaveTransaction(newTx);
   };
 
   const handleDeleteTransaction = async (txId: string) => {
     await db.transactions.delete(txId);
+    apiDeleteTransaction(txId);
   };
 
   // Helper trigger modals
@@ -240,7 +290,6 @@ export function App() {
           />
         )}
 
-
         {activeTab === 'money' && (
           <MoneyHistory
             people={people}
@@ -291,13 +340,13 @@ export function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onRefreshData={() => {
-          // Force query refresh if needed
+          fetchFromMongoDBAtlas().catch(console.error);
         }}
       />
 
       {/* Footer */}
       <footer className="border-t border-slate-200/80 dark:border-slate-800 py-6 text-center text-xs text-slate-400">
-        IPO Applications & Account Ledger Tracker • Persistent Offline Storage Enabled
+        IPO Applications & Account Ledger Tracker • Live MongoDB Atlas Multi-Device Sync Active
       </footer>
 
     </div>
