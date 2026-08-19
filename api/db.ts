@@ -19,16 +19,23 @@ export function setCorsHeaders(res: VercelResponse) {
 
 export async function connectToMongoDB(): Promise<{ client: MongoClient; db: Db }> {
   if (!uri) {
-    throw new Error('MONGODB_URI environment variable is not configured.');
+    throw new Error('MONGODB_URI environment variable is not configured in Vercel settings.');
   }
 
   if (cachedClient && cachedDb) {
-    return { client: cachedClient, db: cachedDb };
+    try {
+      // Ping database to ensure connection is alive
+      await cachedDb.command({ ping: 1 });
+      return { client: cachedClient, db: cachedDb };
+    } catch {
+      cachedClient = null;
+      cachedDb = null;
+    }
   }
 
   const client = new MongoClient(uri, {
-    connectTimeoutMS: 10000,
-    socketTimeoutMS: 20000,
+    connectTimeoutMS: 15000,
+    serverSelectionTimeoutMS: 15000,
   });
 
   await client.connect();

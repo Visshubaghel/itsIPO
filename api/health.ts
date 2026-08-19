@@ -27,7 +27,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     return res.status(200).json({
       connected: false,
-      error: error.message || 'Failed to connect to MongoDB Atlas',
+      error: error?.message || String(error) || 'Failed to connect to MongoDB Atlas',
+      name: error?.name || 'ConnectionError',
     });
   }
 }

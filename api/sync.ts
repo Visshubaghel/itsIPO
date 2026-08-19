@@ -19,28 +19,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (Array.isArray(people) && people.length > 0) {
       const col = db.collection('people');
       for (const p of people) {
-        await col.updateOne({ id: p.id }, { $set: p }, { upsert: true });
+        const { _id, ...clean } = p as any;
+        await col.updateOne({ id: clean.id }, { $set: clean }, { upsert: true });
       }
     }
 
     if (Array.isArray(ipos) && ipos.length > 0) {
       const col = db.collection('ipos');
       for (const i of ipos) {
-        await col.updateOne({ id: i.id }, { $set: i }, { upsert: true });
+        const { _id, ...clean } = i as any;
+        await col.updateOne({ id: clean.id }, { $set: clean }, { upsert: true });
       }
     }
 
     if (Array.isArray(applications) && applications.length > 0) {
       const col = db.collection('applications');
       for (const a of applications) {
-        await col.updateOne({ id: a.id }, { $set: a }, { upsert: true });
+        const { _id, ...clean } = a as any;
+        await col.updateOne({ id: clean.id }, { $set: clean }, { upsert: true });
       }
     }
 
     if (Array.isArray(transactions) && transactions.length > 0) {
       const col = db.collection('transactions');
       for (const t of transactions) {
-        await col.updateOne({ id: t.id }, { $set: t }, { upsert: true });
+        const { _id, ...clean } = t as any;
+        await col.updateOne({ id: clean.id }, { $set: clean }, { upsert: true });
       }
     }
 
@@ -55,6 +59,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message || 'Bulk sync error' });
+    console.error('API /api/sync error:', error);
+    return res.status(500).json({
+      error: error?.message || String(error) || 'Internal MongoDB Connection Error',
+      name: error?.name || 'Error',
+    });
   }
 }
