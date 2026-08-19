@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToMongoDB } from './db';
+import { connectToMongoDB, setCorsHeaders } from './db';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     const { db } = await connectToMongoDB();
     const collection = db.collection('transactions');
@@ -12,8 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-      const tx = req.body;
-      if (!tx.id || !tx.personId || !tx.amount) {
+      const tx = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      if (!tx || !tx.id || !tx.personId || !tx.amount) {
         return res.status(400).json({ error: 'Missing transaction id, personId, or amount' });
       }
       await collection.updateOne({ id: tx.id }, { $set: tx }, { upsert: true });

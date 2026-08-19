@@ -1,6 +1,33 @@
 import { db, exportDatabaseJSON } from './db';
 import type { Person, IPO, IPOApplication, Transaction } from '../types';
 
+export interface HealthCheckResult {
+  connected: boolean;
+  database?: string;
+  counts?: {
+    people: number;
+    ipos: number;
+    applications: number;
+    transactions: number;
+  };
+  error?: string;
+}
+
+/**
+ * Checks serverless health endpoint to verify MongoDB Atlas connection
+ */
+export async function checkMongoDBHealth(): Promise<HealthCheckResult> {
+  try {
+    const res = await fetch('/api/health');
+    if (!res.ok) {
+      return { connected: false, error: `HTTP ${res.status} response from Vercel /api/health` };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { connected: false, error: err.message || 'Network error fetching /api/health' };
+  }
+}
+
 /**
  * Fetches all collections from MongoDB Atlas via Vercel serverless API
  * and syncs them into local IndexedDB for live multi-device access.
@@ -28,6 +55,12 @@ export async function fetchFromMongoDBAtlas(): Promise<boolean> {
     const cleanIPOs = ipos.map(({ _id, ...i }: any) => i);
     const cleanApps = applications.map(({ _id, ...a }: any) => a);
     const cleanTxs = transactions.map(({ _id, ...t }: any) => t);
+
+    // If MongoDB Atlas is brand new (0 people & 0 ipos), auto-seed MongoDB from local IndexedDB
+    if (cleanPeople.length === 0 && cleanIPOs.length === 0) {
+      await syncLocalDataToMongoDBAtlas();
+      return true;
+    }
 
     // Sync into IndexedDB
     await db.transaction('rw', [db.people, db.ipos, db.applications, db.transactions], async () => {
@@ -113,14 +146,12 @@ export async function apiDeletePerson(id: string) {
 }
 
 export async function apiSaveIPO(ipo: IPO, newApplications: IPOApplication[]) {
-  // Push IPO
   fetch('/api/ipos', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ipo),
   }).catch(console.error);
 
-  // Push Applications
   for (const app of newApplications) {
     fetch('/api/applications', {
       method: 'POST',

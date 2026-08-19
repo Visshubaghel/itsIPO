@@ -5,6 +5,7 @@ import type { Person, Transaction, ApplicationStatus, TransactionType } from './
 import { generateId, getTodayInputValue } from './utils/formatters';
 import {
   fetchFromMongoDBAtlas,
+  checkMongoDBHealth,
   apiSavePerson,
   apiDeletePerson,
   apiSaveIPO,
@@ -36,6 +37,7 @@ export function App() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('ipo_tracker_dark_mode') === 'true';
   });
+  const [mongoConnected, setMongoConnected] = useState<boolean>(true);
 
   // Modal Visibility States
   const [isAddIPOOpen, setIsAddIPOOpen] = useState(false);
@@ -53,16 +55,23 @@ export function App() {
     // 1. Initial local seed if DB is brand new
     seedInitialData().catch(console.error);
 
-    // 2. Fetch live state from MongoDB Atlas on load
-    fetchFromMongoDBAtlas().catch(console.error);
+    const checkSync = async () => {
+      const health = await checkMongoDBHealth();
+      setMongoConnected(health.connected);
+      if (health.connected) {
+        await fetchFromMongoDBAtlas().catch(console.error);
+      }
+    };
 
-    // 3. Polling every 5 seconds for live multi-device sync
+    checkSync();
+
+    // 2. Polling every 5 seconds for live multi-device sync
     const interval = setInterval(() => {
-      fetchFromMongoDBAtlas().catch(console.error);
+      checkSync();
     }, 5000);
 
-    // 4. Also fetch on window focus when switching back from phone/tab
-    const onFocus = () => fetchFromMongoDBAtlas().catch(console.error);
+    // 3. Also fetch on window focus when switching back from phone/tab
+    const onFocus = () => checkSync();
     window.addEventListener('focus', onFocus);
 
     return () => {
@@ -70,6 +79,7 @@ export function App() {
       window.removeEventListener('focus', onFocus);
     };
   }, []);
+
 
   // Handle Dark Mode CSS Class
   useEffect(() => {
@@ -240,7 +250,9 @@ export function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        mongoConnected={mongoConnected}
       />
+
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">

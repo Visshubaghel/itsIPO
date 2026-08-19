@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToMongoDB } from './db';
+import { connectToMongoDB, setCorsHeaders } from './db';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     const { db } = await connectToMongoDB();
     const collection = db.collection('applications');
@@ -12,8 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-      const app = req.body;
-      if (!app.id || !app.ipoId || !app.personId) {
+      const app = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      if (!app || !app.id || !app.ipoId || !app.personId) {
         return res.status(400).json({ error: 'Missing application id, ipoId, or personId' });
       }
       await collection.updateOne({ id: app.id }, { $set: app }, { upsert: true });
@@ -21,7 +26,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'PUT') {
-      const { id, ...updates } = req.body;
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { id, ...updates } = body || {};
       if (!id) return res.status(400).json({ error: 'Missing id' });
       await collection.updateOne({ id }, { $set: updates });
       return res.status(200).json({ success: true });

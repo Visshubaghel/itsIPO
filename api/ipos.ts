@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectToMongoDB } from './db';
+import { connectToMongoDB, setCorsHeaders } from './db';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     const { db } = await connectToMongoDB();
     const collection = db.collection('ipos');
@@ -12,8 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'POST') {
-      const ipo = req.body;
-      if (!ipo.id || !ipo.name) {
+      const ipo = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      if (!ipo || !ipo.id || !ipo.name) {
         return res.status(400).json({ error: 'Missing ipo id or name' });
       }
       await collection.updateOne({ id: ipo.id }, { $set: ipo }, { upsert: true });

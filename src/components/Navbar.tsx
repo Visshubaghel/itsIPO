@@ -9,7 +9,9 @@ import {
   Sun, 
   HardDriveDownload,
   ArrowUpRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -20,6 +22,7 @@ interface NavbarProps {
   onOpenSettings: () => void;
   darkMode: boolean;
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
+  mongoConnected?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   darkMode,
   setDarkMode,
+  mongoConnected = true,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
@@ -42,10 +46,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">IPO Tracker</span>
-              <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                Pro
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-lg text-slate-900 dark:text-white tracking-tight">IPO Tracker</span>
+                <button
+                  onClick={onOpenSettings}
+                  className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                    mongoConnected
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800'
+                      : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800'
+                  }`}
+                  title={mongoConnected ? 'MongoDB Atlas Live Synced' : 'MongoDB Atlas Connection Issue - Click to view'}
+                >
+                  {mongoConnected ? <Wifi className="w-3 h-3 text-emerald-500" /> : <WifiOff className="w-3 h-3 text-rose-500" />}
+                  <span>{mongoConnected ? 'Cloud Sync' : 'Offline Mode'}</span>
+                </button>
+              </div>
             </div>
           </div>
 
